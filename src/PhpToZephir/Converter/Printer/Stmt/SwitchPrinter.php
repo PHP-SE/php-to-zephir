@@ -24,6 +24,9 @@ class SwitchPrinter extends SimplePrinter
      */
     public function convert(Stmt\Switch_ $node)
     {
+        return 'switch (' . $this->dispatcher->p($node->cond) . ') {'
+            . $this->dispatcher->pStmts($node->cases) . "\n" . '}';
+
         $transformToIf = false;
         foreach ($node->cases as $case) {
             if (($case->cond instanceof Scalar\String_) === false && $case->cond !== null) {

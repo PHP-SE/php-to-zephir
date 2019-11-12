@@ -1,17 +1,14 @@
 <?php
+
 namespace PhpToZephir;
 
-use PhpParser\Node\Param;
-use PhpParser\Node\Stmt\ClassMethod;
 use phpDocumentor\Reflection\DocBlock;
 use phpDocumentor\Reflection\DocBlock\Tag;
-use phpDocumentor\Reflection\DocBlock\Tag\ParamTag;
-use phpDocumentor\Reflection\DocBlock\Tag\ReturnTag;
-use phpDocumentor\Reflection\DocBlock\Tag\ThrowsTag;
-use phpDocumentor\Reflection\DocBlock\Tag\SeeTag;
+use PhpParser\Node;
+use PhpParser\Node\Param;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeAbstract;
 use PhpToZephir\Converter\ClassMetadata;
-use PhpParser\Node;
 
 class TypeFinder
 {
@@ -45,9 +42,9 @@ class TypeFinder
         NodeFetcher $nodeFetcher
     ) {
         $this->reservedWordReplacer = $reservedWordReplacer;
-        $this->logger = $logger;
-        $this->classCollector = $classCollector;
-        $this->nodeFetcher = $nodeFetcher;
+        $this->logger               = $logger;
+        $this->classCollector       = $classCollector;
+        $this->nodeFetcher          = $nodeFetcher;
     }
 
     /**
@@ -83,23 +80,28 @@ class TypeFinder
         }
 
         foreach ($node->params as $param) {
-            $params = [];
-            $params['name'] = $this->replaceReservedWords($param->name);
+            $params            = [];
+            $params['name']    = $this->replaceReservedWords($param->var->name);
             $params['default'] = $param->default;
-            $params['type'] = null;
-
-            /* @var $param \PhpParser\Node\Param */
-            if ($param->type === 'array') {
-                $params['type']['value'] = 'array';
-                $params['type']['isClass'] = false;
+            $params['type']    = null;
+             /* @var $param \PhpParser\Node\Param */
+            if ($param->type instanceof \PhpParser\Node\Identifier) {
+                $name = trim($param->type->name);
+                if ($name !== '') {
+                    if ($name === 'mixed') {
+                        $name = 'var';
+                    }
+                    $params['type']['value']   = $name;
+                    $params['type']['isClass'] = false;
+                }
             } elseif ($param->type === null) { // scalar or not strong typed in method
                 $docBlock = $this->nodeToDocBlock($node);
                 if ($docBlock !== null) {
                     $params['type'] = $this->foundTypeInCommentForVar($docBlock, $param, $classMetadata);
                 }
             } elseif ($param->type instanceof \PhpParser\Node\Name) {
-                $className = ($param->type->firstSlash ? '\\':'') . implode('\\', $param->type->parts);
-                $params['type']['value'] = $className;
+                $className                 = ($param->type->firstSlash ? '\\' : '') . implode('\\', $param->type->parts);
+                $params['type']['value']   = $className;
                 $params['type']['isClass'] = true;
             }
 
@@ -129,10 +131,10 @@ class TypeFinder
         if (isset($attribute['comments']) === false || isset($attribute['comments'][0]) === false) {
             return;
         }
-
         $docBlock = $attribute['comments'][0]->getText();
+        $factory  = \phpDocumentor\Reflection\DocBlockFactory::createInstance();
 
-        return new DocBlock($docBlock);
+        return $factory->create($docBlock);
     }
 
     /**
@@ -147,8 +149,8 @@ class TypeFinder
     private function foundTypeInCommentForVar(DocBlock $phpdoc, Param $param, ClassMetadata $classMetadata)
     {
         foreach ($phpdoc->getTags() as $tag) {
-            if ($tag instanceof \phpDocumentor\Reflection\DocBlock\Tag\ParamTag) {
-                if ($param->name === substr($tag->getVariableName(), 1)) {
+            if ($tag instanceof DocBlock\Tags\Param) {
+                if ($param !== null && $param->name === substr($tag->getVariableName(), 1)) {
                     if (!empty($tag->getType())) {
                         return $this->findType($tag, $param, $classMetadata);
                     }
@@ -171,8 +173,9 @@ class TypeFinder
     private function findReturnTag($phpdoc = null, array $definition, ClassMetadata $classMetadata, NodeAbstract $node)
     {
         $implements = $classMetadata->getImplements();
-        if (is_array($implements) === true) {
+        if (is_array($implements) === true && count($implements) > 0) {
             foreach ($implements as $implement) {
+
                 foreach ($this->classCollector->getCollected() as $className => $classInfo) {
                     if ($classMetadata->getNamespace() . '\\' . $implement === $className) {
                         try {
@@ -191,9 +194,10 @@ class TypeFinder
                 }
             }
         }
-
         if ($phpdoc !== null) {
+
             foreach ($phpdoc->getTags() as $tag) {
+
                 if ($this->isReturnTag($tag) === true) {
                     $definition['return'] = [
                         'type' => $this->findType($tag, $node, $classMetadata),
@@ -210,9 +214,9 @@ class TypeFinder
      * @param ClassMethod $classInfo
      * @param string      $name
      *
+     * @return \PhpParser\Node\Stmt\ClassMethod
      * @throws \InvalidArgumentException
      *
-     * @return \PhpParser\Node\Stmt\ClassMethod
      */
     private function findMethod(array $classInfo, $name)
     {
@@ -233,29 +237,38 @@ class TypeFinder
      */
     private function isReturnTag(Tag $tag)
     {
-        if ($tag instanceof ReturnTag
-            && ($tag instanceof ThrowsTag) === false
-            && ($tag instanceof ParamTag) === false
+        if ($tag instanceof DocBlock\Tags\Return_
+            && ($tag instanceof DocBlock\Tags\Throws) === false
+            && ($tag instanceof DocBlock\Tags\Param) === false
         ) {
             return true;
-        } else {
-            return false;
         }
+
+        return false;
     }
 
     /**
-     * @param string $actualNamespace
-     * @param Tag    $tag
+     * @param Tag                                  $tag
      *
-     * @return string
+     * @param \PhpParser\Node                      $node
+     * @param \PhpToZephir\Converter\ClassMetadata $classMetadata
+     *
+     * @return array
      */
     private function findType(Tag $tag, Node $node, ClassMetadata $classMetadata)
     {
-        $rawType = $tag->getType();
 
-        if ($rawType === 'integer') {
-            $rawType = 'int';
-        }
+        $rawTypes = explode('|', $tag->getType()
+            ->__toString());
+        $rawTypes = array_unique($rawTypes);
+        foreach ($rawTypes as &$rawType) {
+            if ($rawType === 'integer') {
+                $rawType = 'int';
+            } elseif ($rawType === 'mixed') {
+                $rawType = 'var';
+            }
+        }   #
+        unset($rawType);
 
         $primitiveTypes = [
             'string',
@@ -271,6 +284,7 @@ class TypeFinder
             'scalar',
             'void',
             'object',
+            'var',
         ];
 
         $excludedType = [
@@ -283,42 +297,62 @@ class TypeFinder
             'object',
             'self',
             'resource',
-            'true'
+            'true',
         ];
+        $rawTypes     = array_unique($rawTypes);
 
-        if (in_array($rawType, $excludedType) === true || count(explode('|', $rawType)) !== 1) {
-            return ['value' => '', 'isClass' => false];
+        foreach ($rawTypes as $key => $rawType) {
+
+            if (in_array($rawType, $excludedType) === true) {
+                $this->logger->logNode(
+                    sprintf('Type(s) "%s" in excludelist', implode('|', $rawTypes)),
+                    $node,
+                    $classMetadata->getFullQualifiedNameClass()
+                );
+                unset($rawTypes[$key]);
+                // return [['value' => '', 'isClass' => false]];
+            }
         }
 
         $arrayOfPrimitiveTypes = array_map(function ($val) {
             return $val . '[]';
         }, $primitiveTypes);
-
-        if (class_exists($rawType)) {
-            $type = ['value' => $rawType, 'isClass' => true];
-        } elseif ($name = $this->isInUse($rawType, $classMetadata)) {
-            $type = ['value' => $name, 'isClass' => true];
-        } elseif ($name = $this->isInActualNamespaceOrInBase($rawType)) {
-            $type = ['value' => $name, 'isClass' => true];
-        } elseif (strpos($rawType, '[]')) {
-            $type = ['value' => 'array', 'isClass' => false];
-        } elseif (preg_match("/^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$/", $rawType) === 0) { // this is a typo
-            $this->logger->logNode(
-                sprintf('Type "%s" does not exist in docblock', $rawType),
-                $node,
-                $classMetadata->getFullQualifiedNameClass()
-            );
-            $type = ['value' => '', 'isClass' => false];
-        } elseif (in_array(strtolower($rawType), $primitiveTypes)) {
-            $type = ['value' => strtolower($rawType), 'isClass' => false];
-        } elseif (in_array(strtolower($rawType), $arrayOfPrimitiveTypes)) {
-            $type = ['value' => strtolower($rawType), 'isClass' => false];
-        } else { // considered as class
-            $type = ['value' => $rawType, 'isClass' => true];
+        $types                 = [];
+        foreach ($rawTypes as $rawType) {
+            $type = null;
+            if (class_exists($rawType)) {
+                $type = ['value' => $rawType, 'isClass' => true];
+            } elseif ($name = $this->isInUse($rawType, $classMetadata)) {
+                $type = ['value' => $name, 'isClass' => true];
+            } elseif ($name = $this->isInActualNamespaceOrInBase($rawType)) {
+                $type = ['value' => $name, 'isClass' => true];
+            } elseif (strpos($rawType, '[]')) {
+                $type = ['value' => 'array', 'isClass' => false];
+                /*
+            } elseif (preg_match("/^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$/", $rawType) === 0) { // this is a typo
+                $this->logger->logNode(
+                    sprintf('Type "%s" does not exist in docblock', $rawType),
+                    $node,
+                    $classMetadata->getFullQualifiedNameClass()
+                );
+                $type = ['value' => '', 'isClass' => false];
+                */
+            } elseif (in_array(strtolower($rawType), $primitiveTypes)) {
+                $type = ['value' => strtolower($rawType), 'isClass' => false];
+            } elseif (in_array(strtolower($rawType), $arrayOfPrimitiveTypes)) {
+                $type = ['value' => strtolower($rawType), 'isClass' => false];
+            } else { // considered as class
+                $type = ['value' => $rawType, 'isClass' => true];
+            }
+            if ($type) {
+                $types[] = $type;
+            }
+        }
+        if (count($types) === 0) {
+            $types = [['value' => '', 'isClass' => false]];
         }
 
-
-        return $type;
+        return $types;
     }
 
     /**

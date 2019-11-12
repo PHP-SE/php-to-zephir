@@ -21,7 +21,7 @@ class FunctionPrinter extends SimplePrinter
                 $this->dispatcher->getMetadata()->getClass()
             );
         }
-
+        
         return 'function ' . $node->name
             . '(' . $this->dispatcher->pCommaSeparated($node->params) . ')'
             . "\n" . '{' . $this->dispatcher->pStmts($node->stmts) . "\n" . '}';

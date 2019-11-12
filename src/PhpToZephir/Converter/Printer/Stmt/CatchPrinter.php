@@ -26,7 +26,7 @@ class CatchPrinter extends SimplePrinter
             $exceptions[] = $this->dispatcher->p($type);
         }
 
-        return ' catch ' . implode('|', $exceptions) . ', ' . $node->var . ' {'
+        return ' catch ' . implode('|', $exceptions) . ', ' . $node->var->name . ' {'
             . $this->dispatcher->pStmts($node->stmts) . "\n" . '}';
     }
 }

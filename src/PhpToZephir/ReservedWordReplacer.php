@@ -23,6 +23,7 @@ class ReservedWordReplacer
             'loop'       => 'loopp',
             'for'        => 'forr',
             'foreach'    => 'foreachh',
+            'free'         => 'freee',
             'if'         => 'iff',
             'elseif'     => 'elseiff',
             'else'       => 'elsee',

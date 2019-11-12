@@ -2,6 +2,7 @@
 namespace PhpToZephir\Converter\Printer;
 
 use PhpParser\Node\Stmt;
+use PhpParser\Node\Stmt\Class_;
 use PhpToZephir\Converter\SimplePrinter;
 
 class ModifiersPrinter extends SimplePrinter
@@ -19,13 +20,32 @@ class ModifiersPrinter extends SimplePrinter
      *
      * @return string
      */
-    public function convert($modifiers)
+    public function convert($flags)
     {
-        return ($modifiers & Stmt\Class_::MODIFIER_PUBLIC ? 'public ' : '')
-            . ($modifiers & Stmt\Class_::MODIFIER_PROTECTED ? 'protected ' : '')
-            . ($modifiers & Stmt\Class_::MODIFIER_PRIVATE ? 'protected ' : '') // due to #issues/251
-            . ($modifiers & Stmt\Class_::MODIFIER_STATIC ? 'static ' : '')
-            . ($modifiers & Stmt\Class_::MODIFIER_ABSTRACT ? 'abstract ' : '')
-            . ($modifiers & Stmt\Class_::MODIFIER_FINAL ? 'final ' : '');
+        $strs = [];
+        if ($flags & Class_::MODIFIER_PUBLIC) {
+            $strs[] = 'public';
+        }
+        if ($flags & Class_::MODIFIER_PROTECTED) {
+            $strs[] = 'protected';
+        }
+        if ($flags & Class_::MODIFIER_PRIVATE) {
+            $strs[] = 'private';
+        }
+        if ($flags & Class_::MODIFIER_ABSTRACT) {
+            $strs[] = 'abstract';
+        }
+        if ($flags & Class_::MODIFIER_STATIC) {
+            $strs[] = 'static';
+        }
+        if ($flags & Class_::MODIFIER_FINAL) {
+            $strs[] = 'final';
+        }
+
+        if (count($strs)) {
+            return implode(' ', $strs).' ';
+        }
+
+        return '';
     }
 }

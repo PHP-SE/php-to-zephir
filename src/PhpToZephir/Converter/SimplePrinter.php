@@ -1,6 +1,7 @@
 <?php
 namespace PhpToZephir\Converter;
 
+use PhpParser\Node\Stmt\Class_;
 use PhpToZephir\Logger;
 
 abstract class SimplePrinter
@@ -23,4 +24,6 @@ abstract class SimplePrinter
         $this->dispatcher = $dispatcher;
         $this->logger = $logger;
     }
+    
+
 }

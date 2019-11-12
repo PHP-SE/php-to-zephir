@@ -1,11 +1,12 @@
 <?php
+
 namespace PhpToZephir\Converter\Printer\Stmt;
 
-use PhpToZephir\Converter\Dispatcher;
-use PhpToZephir\Logger;
 use PhpParser\Node\Stmt;
-use PhpToZephir\ReservedWordReplacer;
+use PhpToZephir\Converter\Dispatcher;
 use PhpToZephir\Converter\Manipulator\ClassManipulator;
+use PhpToZephir\Logger;
+use PhpToZephir\ReservedWordReplacer;
 
 class InterfacePrinter
 {
@@ -38,9 +39,9 @@ class InterfacePrinter
         ClassManipulator $classManipulator,
         ReservedWordReplacer $reservedWordReplacer
     ) {
-        $this->dispatcher = $dispatcher;
-        $this->logger = $logger;
-        $this->classManipulator = $classManipulator;
+        $this->dispatcher           = $dispatcher;
+        $this->logger               = $logger;
+        $this->classManipulator     = $classManipulator;
         $this->reservedWordReplacer = $reservedWordReplacer;
     }
 
@@ -51,13 +52,14 @@ class InterfacePrinter
 
     public function convert(Stmt\Interface_ $node)
     {
+
         $node->name = $this->reservedWordReplacer->replace($node->name);
 
         $extendsStmt = '';
 
         if (!empty($node->extends)) {
             $extendsStmt = ' extends ';
-            $extends = [];
+            $extends     = [];
             foreach ($node->extends as $extend) {
                 $extends[] = $this->reservedWordReplacer->replace($extend);
             }

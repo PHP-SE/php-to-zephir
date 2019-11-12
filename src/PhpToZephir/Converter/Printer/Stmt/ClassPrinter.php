@@ -1,15 +1,15 @@
 <?php
+
 namespace PhpToZephir\Converter\Printer\Stmt;
 
-use PhpToZephir\Converter\Dispatcher;
-use PhpToZephir\Logger;
-use PhpParser\Node\Stmt;
-use PhpParser\Node\Name;
-use PhpToZephir\Converter\Manipulator\ClassManipulator;
-use PhpToZephir\ReservedWordReplacer;
-use PhpToZephir\NodeFetcher;
-use PhpParser\Node\Expr\AssignOp;
 use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\AssignOp;
+use PhpParser\Node\Stmt;
+use PhpToZephir\Converter\Dispatcher;
+use PhpToZephir\Converter\Manipulator\ClassManipulator;
+use PhpToZephir\Logger;
+use PhpToZephir\NodeFetcher;
+use PhpToZephir\ReservedWordReplacer;
 
 class ClassPrinter
 {
@@ -48,11 +48,11 @@ class ClassPrinter
         ReservedWordReplacer $reservedWordReplacer,
         NodeFetcher $nodeFetcher
     ) {
-        $this->dispatcher = $dispatcher;
-        $this->logger = $logger;
-        $this->classManipulator = $classManipulator;
+        $this->dispatcher           = $dispatcher;
+        $this->logger               = $logger;
+        $this->classManipulator     = $classManipulator;
         $this->reservedWordReplacer = $reservedWordReplacer;
-        $this->nodeFetcher = $nodeFetcher;
+        $this->nodeFetcher          = $nodeFetcher;
     }
 
     public static function getType()
@@ -75,7 +75,7 @@ class ClassPrinter
             }
         }
 
-        return $this->dispatcher->pModifiers($node->type)
+        return $this->dispatcher->pModifiers($node->flags)
             . 'class ' . $node->name
             . (null !== $node->extends ? ' extends ' . $this->dispatcher->p($node->extends) : '')
             . (!empty($node->implements) ? ' implements ' . $this->dispatcher->pCommaSeparated($node->implements) : '')

@@ -109,7 +109,7 @@ class ClosurePrinter
 
         $this->dispatcher->setLastMethod($node->name);
 
-        $stmt = $this->dispatcher->pModifiers($node->type) . 'function ' . $node->name . '(';
+        $stmt = $this->dispatcher->pModifiers($node->flags) . 'function ' . $node->name . '(';
         $varsInMethodSign = [];
 
         if (isset($types['params']) === true) {

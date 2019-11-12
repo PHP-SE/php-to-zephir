@@ -54,6 +54,6 @@ class PropertyPrinter
             $node->props[$key] = $prop;
         }
 
-        return $this->dispatcher->pModifiers($node->type) . $this->dispatcher->pCommaSeparated($node->props) . ';';
+        return $this->dispatcher->pModifiers($node->flags) . $this->dispatcher->pCommaSeparated($node->props) . ';';
     }
 }

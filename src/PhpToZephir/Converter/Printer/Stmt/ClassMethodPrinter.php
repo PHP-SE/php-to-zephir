@@ -1,15 +1,21 @@
 <?php
+
 namespace PhpToZephir\Converter\Printer\Stmt;
 
-use PhpToZephir\Converter\Dispatcher;
-use PhpToZephir\Logger;
-use PhpParser\Node\Expr;
-use PhpParser\Node\Stmt;
 use PhpParser\Node\Arg;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
+use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\NullableType;
+use PhpParser\Node\Stmt;
+use PhpParser\NodeFinder;
+use PhpToZephir\Converter\Dispatcher;
+use PhpToZephir\Converter\Printer;
+use PhpToZephir\Logger;
+use PhpToZephir\NodeFetcher;
 use PhpToZephir\ReservedWordReplacer;
 use PhpToZephir\TypeFinder;
-use PhpToZephir\NodeFetcher;
-use PhpToZephir\Converter\Printer;
 
 class ClassMethodPrinter
 {
@@ -37,6 +43,17 @@ class ClassMethodPrinter
      * @var string
      */
     private $lastMethod = null;
+    private $globalVarNames = [
+        'this',
+        '_SERVER',
+        '_GET',
+        '_POST',
+        '_FILES',
+        '_COOKIE',
+        '_SESSION',
+        '_REQUEST',
+        '_ENV',
+    ];
 
     /**
      * @param Dispatcher           $dispatcher
@@ -52,11 +69,11 @@ class ClassMethodPrinter
         TypeFinder $typeFinder,
         NodeFetcher $nodeFetcher
     ) {
-        $this->dispatcher = $dispatcher;
-        $this->logger = $logger;
+        $this->dispatcher           = $dispatcher;
+        $this->logger               = $logger;
         $this->reservedWordReplacer = $reservedWordReplacer;
-        $this->typeFinder = $typeFinder;
-        $this->nodeFetcher = $nodeFetcher;
+        $this->typeFinder           = $typeFinder;
+        $this->nodeFetcher          = $nodeFetcher;
     }
 
     /**
@@ -82,6 +99,7 @@ class ClassMethodPrinter
      */
     public function convert(Stmt\ClassMethod $node)
     {
+
         $types = $this->typeFinder->getTypes(
             $node,
             $this->dispatcher->getMetadata()
@@ -92,7 +110,8 @@ class ClassMethodPrinter
                     'reference',
                     sprintf('Reference not supported in parametter (var "%s")', $param->name),
                     $param,
-                    $this->dispatcher->getMetadata()->getClass()
+                    $this->dispatcher->getMetadata()
+                        ->getClass()
                 );
             }
         }
@@ -102,21 +121,22 @@ class ClassMethodPrinter
                 'reference',
                 'Reference not supported',
                 $node,
-                $this->dispatcher->getMetadata()->getClass()
+                $this->dispatcher->getMetadata()
+                    ->getClass()
             );
         }
 
         $this->dispatcher->setLastMethod($node->name);
 
-        $stmt = $this->dispatcher->pModifiers($node->type) . 'function ' . $node->name . '(';
+        $stmt             = $this->dispatcher->pModifiers($node->flags) . 'function ' . $node->name . '(';
         $varsInMethodSign = [];
 
         if (isset($types['params']) === true) {
             $params = [];
             foreach ($types['params'] as $type) {
                 $varsInMethodSign[] = $type['name'];
-                $stringType = $this->printType($type);
-                $params[] = ((!empty($stringType)) ? $stringType . ' ' : '') . '' . $type['name'] . (($type['default'] === null) ? '' : ' = ' . $this->dispatcher->p($type['default']));
+                $stringType         = $this->printType($type);
+                $params[]           = ((!empty($stringType)) ? $stringType . ' ' : '') . '' . $type['name'] . (($type['default'] === null) ? '' : ' = ' . $this->dispatcher->p($type['default']));
             }
 
             $stmt .= implode(', ', $params);
@@ -140,6 +160,7 @@ class ClassMethodPrinter
     private function printVars(Stmt\ClassMethod $node, array $varsInMethodSign)
     {
         $var = '';
+
         $vars = array_diff(array_unique(array_filter($this->collectVars($node))), $varsInMethodSign);
         if (!empty($vars)) {
             $var .= "\n    var " . implode(', ', $vars) . ";\n";
@@ -160,17 +181,49 @@ class ClassMethodPrinter
     private function printReturn(Stmt\ClassMethod $node, array $types)
     {
         $stmt = '';
-        if ($GLOBALS['printClass']) {
-            $a = 1;
-           // print_r($node);
-           // print_r($types);
-        }
-        if (!empty($node->getReturnType()) && is_string($node->getReturnType())) {
-            $stmt .= ' -> ' . $node->getReturnType();
-        } elseif (array_key_exists('return', $types) === false && $this->hasReturnStatement($node) === false) {
-            $stmt .= ' -> void';
-        } elseif (array_key_exists('return', $types) === true && empty($types['return']['type']['value']) === false) {
-            $stmt .= ' -> ' . $this->printType($types['return']);
+
+        $returnType = $node->getReturnType();
+        $nullAble   = false;
+        if (trim($node->name) !== '__construct') {
+            if ($returnType !== null) {
+
+                if ($returnType instanceof NullableType) {
+                    $nullAble   = true;
+                    $returnType = $returnType->type;
+                }
+                if ($returnType instanceof Identifier) {
+                    $stmt .= ' -> ' . $returnType->name;
+                } elseif ($returnType instanceof FullyQualified) {
+                    $stmt .= ' -> ' . '<\\' . implode('\\', $returnType->parts) . '>';
+                } elseif ($returnType instanceof Name) {
+                    $stmt .= ' -> ' . '<' . implode('\\', $returnType->parts) . '>';
+                } elseif (array_key_exists('return', $types) === true && $this->hasReturnStatement($node) === true) {
+                    $returns = $this->prepareReturnTypes($types);
+                    if (count($returns) > 0) {
+                        $stmt .= ' -> ' . implode(' | ', $returns);
+                    }
+                } elseif (array_key_exists('return', $types) === false && $this->hasReturnStatement($node) === false) {
+                    // $stmt     .= ' -> void';
+                    $nullAble = false;
+                }
+                if ($nullAble) {
+                    $stmt .= ' | null';
+                }
+            } else {
+                if (array_key_exists('return', $types) === true && $this->hasReturnStatement($node) === true) {
+                    $returns = $this->prepareReturnTypes($types);
+                    if (count($returns) > 0) {
+                        $stmt .= ' -> ' . implode(' | ', $returns);
+                    }
+                } elseif (array_key_exists('return', $types) === false && $this->hasReturnStatement($node) === false) {
+                    // $stmt .= ' -> void';
+                } elseif (array_key_exists('return', $types) === true) {
+                    $returns = $this->prepareReturnTypes($types);
+                    if (count($returns) > 0) {
+                        $stmt .= ' -> ' . implode(' | ', $returns);
+                    }
+                }
+            }
         }
 
         return $stmt;
@@ -181,19 +234,12 @@ class ClassMethodPrinter
      *
      * @return bool
      */
-    private function hasReturnStatement($nodes)
-    {
-        foreach ($this->nodeFetcher->foreachNodes($nodes) as $nodeData) {
-            $node = $nodeData['node'];
-            if ($GLOBALS['printClass']) {
-             //   echo get_class($node) . PHP_EOL;
-            }
-            if ($node instanceof Stmt\Return_) {
-                return true;
-            }
-        }
+    private function hasReturnStatement(
+        $node
+    ) {
+        $nodeFinder = new NodeFinder();
 
-        return false;
+        return $nodeFinder->findFirstInstanceOf([$node], Stmt\Return_::class) !== null;
     }
 
     /**
@@ -202,8 +248,10 @@ class ClassMethodPrinter
      *
      * @return \ArrayIterator|array
      */
-    private function collectVars($node, array $vars = [])
-    {
+    private function collectVars(
+        $node,
+        array $vars = []
+    ) {
         $noFetcher = new NodeFetcher();
 
         foreach ($noFetcher->foreachNodes($node) as &$stmt) {
@@ -214,11 +262,13 @@ class ClassMethodPrinter
                     && ($stmt['node']->var instanceof Expr\List_) === false
                 ) {
                     if (is_object($stmt['node']->var->name) === false) { // if true it is a dynamic var
+
                         $vars[] = $stmt['node']->var->name;
                     }
                 } elseif (($stmt['node']->var instanceof Expr\List_) === true) {
                     $varInList = [];
                     foreach ($stmt['node']->var->items as $var) {
+
                         if (null !== $var) {
                             $varInList[] = ucfirst($this->dispatcher->p($var));
                             if (($var instanceof Expr\ArrayDimFetch) === false) {
@@ -228,6 +278,16 @@ class ClassMethodPrinter
                     }
 
                     $vars[] = 'tmpList' . str_replace(['[', ']', '"'], '', implode('', $varInList));
+                }
+            } elseif ($stmt['node'] instanceof Expr\Variable) {
+
+                if ($stmt['node']->name) {
+                    if (is_string($stmt['node']->name)) {
+                        $name = $this->removeGlobalVars($stmt['node']->name);
+                        if ($name !== '') {
+                            $vars[] = $name;
+                        }
+                    }
                 }
             } elseif ($stmt['node'] instanceof Stmt\Foreach_) {
                 if (null !== $stmt['node']->keyVar) {
@@ -248,7 +308,12 @@ class ClassMethodPrinter
                     }
                 }
             } elseif ($stmt['node'] instanceof Stmt\Catch_) {
-                $vars[] = $stmt['node']->var;
+                if (is_string($stmt['node']->name)) {
+                    
+                    $vars[] = $stmt['node']->name;
+                } else {
+                    $vars[] = $stmt['node']->var->name;
+                }
             } elseif ($stmt['node'] instanceof Stmt\Return_ && $stmt['node']->expr instanceof Expr\Array_) {
                 $vars[] = 'tmpArray' . md5(serialize($stmt['node']->expr->items));
             } elseif ($stmt['node'] instanceof Stmt\Static_) {
@@ -268,8 +333,9 @@ class ClassMethodPrinter
                 }
             }
         }
-
-        $vars = array_map([$this->reservedWordReplacer, 'replace'], $vars);
+        if (count($vars) > 0) {
+            $vars = array_map([$this->reservedWordReplacer, 'replace'], $vars);
+        }
 
         return $vars;
     }
@@ -277,12 +343,13 @@ class ClassMethodPrinter
     /**
      * @param array $type
      *
+     * @return string
      * @throws \Exception
      *
-     * @return string
      */
-    private function printType($type)
-    {
+    private function printType(
+        $type
+    ) {
         if (isset($type['type']) === false) {
             return '';
         }
@@ -295,4 +362,39 @@ class ClassMethodPrinter
 
         return ($type['type']['isClass'] === true) ? '<' . $type['type']['value'] . '>' : $type['type']['value'];
     }
+
+    /**
+     * @param array $types
+     *
+     * @return array
+     */
+    private function prepareReturnTypes(
+        $types
+    ) {
+        $returns = [];
+        if (is_array($types['return']['type'])) {
+            foreach ($types['return']['type'] as $return) {
+                if (!empty($return['value'])) {
+                    if ($return['isClass']) {
+                        $returns[] = '<' . $return['value'] . '>';
+                    } else {
+                        $returns[] = $return['value'];
+                    }
+                }
+            }
+            $returns = array_unique($returns);
+        }
+
+        return $returns;
+    }
+
+    private function removeGlobalVars($name)
+    {
+        if (in_array($name, $this->globalVarNames)) {
+            return '';
+        }
+
+        return $name;
+    }
 }
+
