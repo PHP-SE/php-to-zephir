@@ -1,7 +1,7 @@
 Php to Zephir
 =============
 
-[![Build Status](https://travis-ci.org/fezfez/php-to-zephir.svg?branch=master)](https://travis-ci.org/fezfez/php-to-zephir)
+[![Build Status](https://travis-ci.org/PHP-SE/php-to-zephir.svg?branch=master)](https://travis-ci.org/PHP-SE/php-to-zephir)
 [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/fezfez/php-to-zephir/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/fezfez/php-to-zephir/?branch=master)
 [![Code Coverage](https://scrutinizer-ci.com/g/fezfez/php-to-zephir/badges/coverage.png?b=master)](https://scrutinizer-ci.com/g/fezfez/php-to-zephir/?branch=master)
 
